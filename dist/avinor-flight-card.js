@@ -15,6 +15,7 @@ try {
       description: 'Table of Avinor flights from sensor attributes (custom component).',
       preview: true,
       documentationURL: 'https://github.com/WickedGhost/avinor_flight_data',
+      version: __VERSION__
     });
   }
 } catch (e) {

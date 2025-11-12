@@ -1,8 +1,12 @@
 name: Release
 
 on:
+  # Run when a GitHub release is published OR when a matching tag is pushed
   release:
     types: [published]
+  push:
+    tags:
+      - 'v*.*.*'
 
 jobs:
   release:
@@ -11,6 +15,15 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Validate release
         run: |
@@ -21,25 +34,33 @@ jobs:
           fi
           
           # Check that main files exist
-          for file in "avinor-flight-card.js" "hacs.json" "README.md"; do
+          for file in "dist/avinor-flight-card.js" "hacs.json" "README.md"; do
             if [ ! -f "$file" ]; then
               echo "Required file $file is missing!"
               exit 1
             fi
           done
 
-      - name: Update version references
+      - name: Inject version into distributed file
         run: |
-          VERSION="${{ github.ref_name }}"
-          echo "Release version: $VERSION"
-          
-          # Update any version references in the code if needed
-          # (This is where you could update version numbers in your files)
+          TAG="${{ github.ref_name }}"
+          VERSION_NO_V="${TAG#v}"
+          echo "Release tag: ${TAG} -> Version: ${VERSION_NO_V}"
+          mkdir -p release
+          # Replace __VERSION__ placeholder and write to release folder
+          node -e "const fs=require('fs');let s=fs.readFileSync('dist/avinor-flight-card.js','utf8');s=s.replace(/__VERSION__/g,'${VERSION_NO_V}');fs.writeFileSync('release/avinor-flight-card.js',s);"
+
+      - name: Build optional minified artifact
+        run: |
+          # Build a minified variant (does not replace main file)
+          VERSION="${{ github.ref_name }}" npm run build
           
       - name: Create release artifacts
         run: |
           # Create a zip file with the main card file for easy installation
-          zip -r avinor-flight-card-${{ github.ref_name }}.zip avinor-flight-card.js README.md LICENSE
+          cd release
+          zip -r ../avinor-flight-card-${{ github.ref_name }}.zip avinor-flight-card.js ../README.md ../LICENSE
+          cd -
           
       - name: Upload release assets
         uses: actions/upload-release-asset@v1

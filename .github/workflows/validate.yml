@@ -14,23 +14,30 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
       - name: HACS validation
         uses: hacs/action@main
         with:
           category: "plugin"
           ignore: "brands"
 
-      - name: Validate JavaScript syntax
+      - name: Build (minified variant)
+        run: npm run build
+
+      - name: Validate JavaScript syntax (parse only)
         run: |
-          # Check if the main JavaScript file exists and has valid syntax
-          if [ -f "avinor-flight-card.js" ]; then
-            echo "Checking JavaScript syntax..."
-            node -c avinor-flight-card.js
-            echo "JavaScript syntax validation passed!"
-          else
-            echo "Main JavaScript file not found!"
-            exit 1
-          fi
+          # Ensure distributed file exists
+          test -f "dist/avinor-flight-card.js"
+          # Parse the JS file to catch syntax errors (no execution)
+          node -e "new Function(require('fs').readFileSync('dist/avinor-flight-card.js','utf8'))"
 
       - name: Check HACS configuration
         run: |
@@ -47,7 +54,7 @@ jobs:
       - name: Check required files
         run: |
           # Check for required files
-          for file in "README.md" "LICENSE" "avinor-flight-card.js" "hacs.json"; do
+          for file in "README.md" "LICENSE" "dist/avinor-flight-card.js" "hacs.json"; do
             if [ ! -f "$file" ]; then
               echo "Required file $file is missing!"
               exit 1
