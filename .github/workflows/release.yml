@@ -69,11 +69,8 @@ jobs:
           cd -
           
       - name: Upload release assets
-        uses: actions/upload-release-asset@v1
+        run: |
+          # Upload using GitHub CLI which handles permissions correctly
+          gh release upload ${{ github.ref_name }} avinor-flight-card-${{ github.ref_name }}.zip --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ./avinor-flight-card-${{ github.ref_name }}.zip
-          asset_name: avinor-flight-card-${{ github.ref_name }}.zip
-          asset_content_type: application/zip
