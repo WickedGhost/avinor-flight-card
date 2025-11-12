@@ -18,10 +18,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            echo "Lock file present, using npm ci";
+            npm ci;
+          else
+            echo "No lock file, falling back to npm install";
+            npm install;
+          fi
 
       - name: HACS validation
         uses: hacs/action@main
