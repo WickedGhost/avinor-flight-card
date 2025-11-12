@@ -1,0 +1,34 @@
+name: Set Repository Topics
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/topics.yml']
+
+jobs:
+  set-topics:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set repository topics
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const topics = [
+              'home-assistant',
+              'lovelace', 
+              'custom-card',
+              'avinor',
+              'flight-data',
+              'hacs',
+              'frontend',
+              'dashboard'
+            ];
+            
+            await github.rest.repos.replaceAllTopics({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              names: topics
+            });
+            
+            console.log(`Set topics: ${topics.join(', ')}`);
