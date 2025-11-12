@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  release:
+    name: Prepare release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate release
+        run: |
+          # Ensure the release tag matches expected format (v*.*.*)
+          if [[ ! "${{ github.ref_name }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tag must follow semantic versioning (v1.0.0)"
+            exit 1
+          fi
+          
+          # Check that main files exist
+          for file in "avinor-flight-card.js" "hacs.json" "README.md"; do
+            if [ ! -f "$file" ]; then
+              echo "Required file $file is missing!"
+              exit 1
+            fi
+          done
+
+      - name: Update version references
+        run: |
+          VERSION="${{ github.ref_name }}"
+          echo "Release version: $VERSION"
+          
+          # Update any version references in the code if needed
+          # (This is where you could update version numbers in your files)
+          
+      - name: Create release artifacts
+        run: |
+          # Create a zip file with the main card file for easy installation
+          zip -r avinor-flight-card-${{ github.ref_name }}.zip avinor-flight-card.js README.md LICENSE
+          
+      - name: Upload release assets
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./avinor-flight-card-${{ github.ref_name }}.zip
+          asset_name: avinor-flight-card-${{ github.ref_name }}.zip
+          asset_content_type: application/zip

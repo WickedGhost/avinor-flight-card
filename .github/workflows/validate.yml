@@ -1,0 +1,56 @@
+name: Validate
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 0 * * *"
+
+jobs:
+  validate:
+    runs-on: "ubuntu-latest"
+    name: Validate
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: HACS validation
+        uses: hacs/action@main
+        with:
+          category: "plugin"
+          ignore: "brands"
+
+      - name: Validate JavaScript syntax
+        run: |
+          # Check if the main JavaScript file exists and has valid syntax
+          if [ -f "avinor-flight-card.js" ]; then
+            echo "Checking JavaScript syntax..."
+            node -c avinor-flight-card.js
+            echo "JavaScript syntax validation passed!"
+          else
+            echo "Main JavaScript file not found!"
+            exit 1
+          fi
+
+      - name: Check HACS configuration
+        run: |
+          # Validate hacs.json exists and is valid JSON
+          if [ -f "hacs.json" ]; then
+            echo "Validating hacs.json..."
+            python -m json.tool hacs.json > /dev/null
+            echo "hacs.json validation passed!"
+          else
+            echo "hacs.json not found!"
+            exit 1
+          fi
+
+      - name: Check required files
+        run: |
+          # Check for required files
+          for file in "README.md" "LICENSE" "avinor-flight-card.js" "hacs.json"; do
+            if [ ! -f "$file" ]; then
+              echo "Required file $file is missing!"
+              exit 1
+            fi
+          done
+          echo "All required files are present!"
