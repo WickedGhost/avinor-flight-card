@@ -1,0 +1,9 @@
+{
+  "name": "Avinor Flight Card",
+  "content_in_root": true,
+  "filename": "avinor-flight-card.js",
+  "country": ["NO"],
+  "homeassistant": "0.115.0",
+  "render_readme": true,
+  "iot_class": "Cloud Polling"
+}
