@@ -2,17 +2,18 @@ name: Set Repository Topics
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths: ['.github/workflows/topics.yml']
 
 jobs:
   set-topics:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      metadata: write
     steps:
       - name: Set repository topics
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const topics = [
               'home-assistant',
@@ -25,10 +26,16 @@ jobs:
               'dashboard'
             ];
             
-            await github.rest.repos.replaceAllTopics({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              names: topics
-            });
-            
-            console.log(`Set topics: ${topics.join(', ')}`);
+            try {
+              await github.rest.repos.replaceAllTopics({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                names: topics
+              });
+              console.log(`✅ Set topics: ${topics.join(', ')}`);
+            } catch (error) {
+              console.log('❌ Failed to set topics automatically. Please add them manually:');
+              console.log('Go to: https://github.com/WickedGhost/avinor-flight-card/settings');
+              console.log('Topics to add:', topics.join(', '));
+              throw error;
+            }
