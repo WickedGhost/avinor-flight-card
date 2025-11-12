@@ -1,12 +1,9 @@
 name: Release
 
 on:
-  # Run when a GitHub release is published OR when a matching tag is pushed
+  # Run only when a GitHub release is published
   release:
     types: [published]
-  push:
-    tags:
-      - 'v*.*.*'
 
 jobs:
   release:
