@@ -67,10 +67,10 @@ jobs:
           cd release
           zip -r ../avinor-flight-card-${{ github.ref_name }}.zip avinor-flight-card.js ../README.md ../LICENSE
           cd -
-          
-      - name: Upload release assets
-        run: |
-          # Upload using GitHub CLI which handles permissions correctly
-          gh release upload ${{ github.ref_name }} avinor-flight-card-${{ github.ref_name }}.zip --clobber
+      
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v1
+        with:
+          files: avinor-flight-card-${{ github.ref_name }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
