@@ -1,6 +1,6 @@
 {
   "name": "avinor-flight-card",
-  "version": "0.0.0-dev",
+  "version": "1.0.4",
   "private": true,
   "type": "module",
   "scripts": {
