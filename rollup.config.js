@@ -2,14 +2,14 @@ import resolve from '@rollup/plugin-node-resolve';
 import commonjs from '@rollup/plugin-commonjs';
 import replace from '@rollup/plugin-replace';
 import terser from '@rollup/plugin-terser';
+import { readFileSync } from 'node:fs';
 
-const version = process.env.VERSION || '0.0.0-dev';
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url)));
 
 export default {
-  // Build a minified variant from the distributed file, do not overwrite main dist file
-  input: 'dist/avinor-flight-card.js',
+  input: 'src/avinor-flight-card.js',
   output: {
-    file: 'dist/avinor-flight-card.min.js',
+    file: 'dist/avinor-flight-card.js',
     format: 'es',
     sourcemap: false,
   },
@@ -17,11 +17,15 @@ export default {
     replace({
       preventAssignment: true,
       values: {
-        __VERSION__: JSON.stringify(version),
+        __VERSION__: JSON.stringify(pkg.version),
       },
     }),
     resolve(),
     commonjs(),
-    terser(),
+    terser({
+      format: {
+        comments: false,
+      },
+    }),
   ],
 };
