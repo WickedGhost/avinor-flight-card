@@ -6,7 +6,8 @@
   "scripts": {
     "clean": "rimraf dist",
     "build": "rimraf dist && rollup -c",
-    "watch": "rollup -c -w"
+    "watch": "rollup -c -w",
+    "set-version": "node scripts/set-version.mjs"
   },
   "devDependencies": {
     "@rollup/plugin-commonjs": "^25.0.8",
