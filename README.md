@@ -57,6 +57,12 @@ npm run build
 
 The bundled file is written to `dist/avinor-flight-card.js`, which is the artifact consumed by HACS.
 
+### Release Process
+
+1. Update `package.json` with the new semantic version (for example `1.2.3`).
+2. Commit the change and tag the release as `v1.2.3`.
+3. Push the tag to GitHub. The `Release Assets` workflow builds the bundle and uploads both `avinor-flight-card.js` and a convenience ZIP to the GitHub release so HACS can fetch the raw JavaScript file.
+
 ## Configuration
 
 Add the card to your Lovelace dashboard:
