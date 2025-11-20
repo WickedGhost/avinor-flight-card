@@ -41,7 +41,7 @@ A custom Lovelace card for Home Assistant that displays flight information from 
 ```yaml
 lovelace:
   resources:
-    - url: /local/avinor-flight-card.js?v=1.0.0
+    - url: /local/avinor-flight-card.js?v=1.0.5
       type: module
 ```
 
@@ -58,6 +58,16 @@ npm run build
 ```
 
 The bundled file is written to `dist/avinor-flight-card.js`, which is uploaded as `avinor-flight-card.js` in each GitHub release for HACS.
+
+### Versioning
+
+Before tagging a release, bump the version everywhere with:
+
+```bash
+npm run set-version -- 1.2.3
+```
+
+This updates `package.json`, `package-lock.json`, and the version string in the README's YAML example.
 
 ## Configuration
 
