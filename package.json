@@ -4,8 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "rollup -c",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist",
+    "build": "rimraf dist && rollup -c",
+    "watch": "rollup -c -w"
   },
   "devDependencies": {
     "@rollup/plugin-commonjs": "^25.0.8",
