@@ -19,6 +19,8 @@ A custom Lovelace card for Home Assistant that displays flight information from 
 - Customizable title and entity selection
 - Responsive design for mobile and desktop
 
+![Avinor Flight Card example](example_afc.png)
+
 ## Installation
 
 ### HACS (Recommended)
