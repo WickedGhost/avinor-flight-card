@@ -31,8 +31,8 @@ A custom Lovelace card for Home Assistant that displays flight information from 
 
 ### Manual Installation
 
-1. Download the `dist/avinor-flight-card.js` file from the [latest release][releases]
-  - The file inside the release ZIP has the version string embedded and is recommended
+1. Download the `avinor-flight-card.js` asset from the [latest release][releases]
+  - A ZIP containing the same file plus documentation is also attached if you prefer that format
 2. Copy it to your `config/www` folder (you may keep it inside a `custom-lovelace` or similar subfolder)
 3. Add the following to your `configuration.yaml` (cache-busting with version is recommended):
 
@@ -55,7 +55,7 @@ npm install
 npm run build
 ```
 
-The bundled file is written to `dist/avinor-flight-card.js`, which is the artifact consumed by HACS.
+The bundled file is written to `dist/avinor-flight-card.js`, which is uploaded as `avinor-flight-card.js` in each GitHub release for HACS.
 
 ## Configuration
 

@@ -1,17 +1,14 @@
-name: Release
+name: Release Assets
 
 on:
-  # Run only when a GitHub release is published
   release:
     types: [published]
 
 jobs:
   release:
-    name: Prepare release
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      actions: read
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -19,58 +16,51 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: 20
+          cache: 'npm'
 
       - name: Install dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            echo "Lock file present, using npm ci";
-            npm ci;
-          else
-            echo "No lock file, falling back to npm install";
-            npm install;
-          fi
+        run: npm ci
 
-      - name: Validate release
+      - name: Build distribution bundle
+        run: npm run build
+
+      - name: Validate release tag and files
         run: |
-          # Ensure the release tag matches expected format (v*.*.*)
-          if [[ ! "${{ github.ref_name }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Release tag must follow semantic versioning (v1.0.0)"
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tag must follow semantic versioning (v1.2.3)"
             exit 1
           fi
-          
-          # Check that main files exist
-          for file in "dist/avinor-flight-card.js" "hacs.json" "README.md"; do
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if [ "$PKG_VERSION" != "$VERSION" ]; then
+            echo "package.json version ($PKG_VERSION) does not match tag ($VERSION)"
+            exit 1
+          fi
+          for file in dist/avinor-flight-card.js hacs.json README.md LICENSE; do
             if [ ! -f "$file" ]; then
-              echo "Required file $file is missing!"
+              echo "Required file $file is missing"
               exit 1
             fi
           done
 
-      - name: Inject version into distributed file
-        run: |
-          TAG="${{ github.ref_name }}"
-          VERSION_NO_V="${TAG#v}"
-          echo "Release tag: ${TAG} -> Version: ${VERSION_NO_V}"
-          mkdir -p release
-          # Replace __VERSION__ placeholder and write to release folder
-          node -e "const fs=require('fs');let s=fs.readFileSync('dist/avinor-flight-card.js','utf8');s=s.replace(/__VERSION__/g,'${VERSION_NO_V}');fs.writeFileSync('release/avinor-flight-card.js',s);"
-
-      - name: Build optional minified artifact
-        run: |
-          # Build a minified variant (does not replace main file)
-          VERSION="${{ github.ref_name }}" npm run build
-          
-      - name: Create release artifacts
-        run: |
-          # Create a zip file with the main card file for easy installation
-          cd release
-          zip -r ../avinor-flight-card-${{ github.ref_name }}.zip avinor-flight-card.js ../README.md ../LICENSE
-          cd -
-      
-      - name: Upload release asset
-        uses: softprops/action-gh-release@v1
-        with:
-          files: avinor-flight-card-${{ github.ref_name }}.zip
+      - name: Prepare release assets
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          mkdir -p release
+          cp dist/avinor-flight-card.js release/avinor-flight-card.js
+          cp README.md release/README.md
+          cp LICENSE release/LICENSE
+          cd release
+          ZIP_NAME="avinor-flight-card-${TAG_NAME}.zip"
+          zip -q "$ZIP_NAME" avinor-flight-card.js README.md LICENSE
+          cd -
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/avinor-flight-card.js
+            release/avinor-flight-card-${{ github.ref_name }}.zip

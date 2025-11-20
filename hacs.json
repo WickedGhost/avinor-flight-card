@@ -1,6 +1,7 @@
 {
   "name": "Avinor Flight Card",
-  "filename": "dist/avinor-flight-card.js",
+  "filename": "avinor-flight-card.js",
+  "zip_release": false,
   "render_readme": true,
   "country": ["NO"]
 }
