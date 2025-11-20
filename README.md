@@ -59,7 +59,7 @@ The bundled file is written to `dist/avinor-flight-card.js`, which is the artifa
 
 ### Release Process
 
-1. Update `package.json` with the new semantic version (for example `1.2.3`).
+1. Update `package.json` with the new semantic version **without the "v" prefix** (for example `1.2.3`). The release tag should use the "v" prefix (for example `v1.2.3`).
 2. Commit the change and tag the release as `v1.2.3`.
 3. Push the tag to GitHub. The `Release Assets` workflow builds the bundle and uploads both `avinor-flight-card.js` and a convenience ZIP to the GitHub release so HACS can fetch the raw JavaScript file.
 
