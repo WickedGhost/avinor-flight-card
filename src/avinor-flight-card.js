@@ -23,6 +23,15 @@ try {
 }
 
 class AvinorFlightCard extends HTMLElement {
+  constructor() {
+    super();
+    this._config = null;
+    this._hass = null;
+    this._excludedColumns = new Set();
+    this._card = null;
+    this._content = null;
+  }
+
   static getStubConfig(hass) {
     // Provide a simple default entity for preview/selection in the card picker
     if (hass && hass.states) {
@@ -31,7 +40,7 @@ class AvinorFlightCard extends HTMLElement {
         return { entity: firstSensor, title: 'Avinor Flight Data' };
       }
     }
-    return { entity: '', title: 'Avinor Flight Data' };
+    return { entity: '', title: 'Avinor Flight Data', exclude_columns: [] };
   }
 
   static getConfigElement() {
@@ -39,27 +48,43 @@ class AvinorFlightCard extends HTMLElement {
   }
 
   setConfig(config) {
-    if (!config.entity) {
+    if (!config || !config.entity) {
       throw new Error('Please define entity');
     }
-    this._config = config;
-    this._content = document.createElement('div');
-    this._content.style.padding = '16px';
-    const card = document.createElement('ha-card');
-    if (config.title) {
-      card.header = config.title;
-    } else {
-      card.header = 'Avinor Flight Data';
+    // Keep defaults stable even when config is missing keys
+    this._config = {
+      title: 'Avinor Flight Data',
+      exclude_columns: [],
+      ...config,
+    };
+
+    this._excludedColumns = this._normalizeExcludedColumns(this._config.exclude_columns);
+
+    if (!this._card) {
+      this._card = document.createElement('ha-card');
+      this._content = document.createElement('div');
+      this._content.style.padding = '16px';
+      this._card.appendChild(this._content);
+      this.appendChild(this._card);
     }
-    card.appendChild(this._content);
-    this.appendChild(card);
+
+    this._card.header = this._config.title || 'Avinor Flight Data';
+
+    // Re-render immediately if hass is already set
+    if (this._hass) {
+      this.hass = this._hass;
+    }
   }
 
   set hass(hass) {
     this._hass = hass;
-    if (!this._config) return;
+    if (!this._config || !this._content) return;
+
+    // Keep excluded columns in sync if config changes via UI
+    this._excludedColumns = this._normalizeExcludedColumns(this._config.exclude_columns);
+
     const entityId = this._config.entity;
-    const state = hass.states[entityId];
+    const state = hass && hass.states ? hass.states[entityId] : undefined;
     if (!state) {
       this._content.innerHTML = `<div>Entity ${entityId} not found</div>`;
       return;
@@ -73,6 +98,13 @@ class AvinorFlightCard extends HTMLElement {
     
     // Hide Check-in and Gate columns for arrivals (A)
     const isArrival = direction === 'A';
+
+    const isExcluded = (key) => {
+      if (this._excludedColumns.has(key)) return true;
+      // Preserve legacy behavior: arrivals never show check-in / gate
+      if (isArrival && (key === 'check_in' || key === 'gate')) return true;
+      return false;
+    };
 
     const header = `Airport: ${airport} • Direction: ${direction} • Flights: ${flights.length} • Updated: ${lastUpdate}`;
 
@@ -96,13 +128,13 @@ class AvinorFlightCard extends HTMLElement {
 
       return `
         <tr>
-          <td style="padding: 8px;">${this._e(f.flightId)}</td>
-          <td style="padding: 8px;">${this._e(flightType)}</td>
-          <td style="padding: 8px;">${this._e(scheduleTime)}</td>
-          <td style="padding: 8px;">${this._e(airportName)}</td>
-          ${!isArrival ? `<td style="padding: 8px;">${this._e(f.check_in)}</td>` : ''}
-          ${!isArrival ? `<td style="padding: 8px;">${this._e(f.gate)}</td>` : ''}
-          <td style="padding: 8px;">${this._e(statusText)}</td>
+          ${isExcluded('flight') ? '' : `<td style="padding: 8px;">${this._e(f.flightId)}</td>`}
+          ${isExcluded('type') ? '' : `<td style="padding: 8px;">${this._e(flightType)}</td>`}
+          ${isExcluded('scheduled') ? '' : `<td style="padding: 8px;">${this._e(scheduleTime)}</td>`}
+          ${isExcluded('airport') ? '' : `<td style="padding: 8px;">${this._e(airportName)}</td>`}
+          ${isExcluded('check_in') ? '' : `<td style="padding: 8px;">${this._e(f.check_in)}</td>`}
+          ${isExcluded('gate') ? '' : `<td style="padding: 8px;">${this._e(f.gate)}</td>`}
+          ${isExcluded('status') ? '' : `<td style="padding: 8px;">${this._e(statusText)}</td>`}
         </tr>
       `;
     }).join('');
@@ -113,13 +145,13 @@ class AvinorFlightCard extends HTMLElement {
         <table style="width:100%; border-collapse: collapse;">
           <thead>
             <tr>
-              <th style="text-align:left; padding: 8px; border-bottom: 1px solid var(--divider-color);">Flight</th>
-              <th style="text-align:left; padding: 8px; border-bottom: 1px solid var(--divider-color);">Type</th>
-              <th style="text-align:left; padding: 8px; border-bottom: 1px solid var(--divider-color);">Scheduled</th>
-              <th style="text-align:left; padding: 8px; border-bottom: 1px solid var(--divider-color);">Airport</th>
-              ${!isArrival ? '<th style="text-align:left; padding: 8px; border-bottom: 1px solid var(--divider-color);">Check-in</th>' : ''}
-              ${!isArrival ? '<th style="text-align:left; padding: 8px; border-bottom: 1px solid var(--divider-color);">Gate</th>' : ''}
-              <th style="text-align:left; padding: 8px; border-bottom: 1px solid var(--divider-color);">Status</th>
+              ${isExcluded('flight') ? '' : '<th style="text-align:left; padding: 8px; border-bottom: 1px solid var(--divider-color);">Flight</th>'}
+              ${isExcluded('type') ? '' : '<th style="text-align:left; padding: 8px; border-bottom: 1px solid var(--divider-color);">Type</th>'}
+              ${isExcluded('scheduled') ? '' : '<th style="text-align:left; padding: 8px; border-bottom: 1px solid var(--divider-color);">Scheduled</th>'}
+              ${isExcluded('airport') ? '' : '<th style="text-align:left; padding: 8px; border-bottom: 1px solid var(--divider-color);">Airport</th>'}
+              ${isExcluded('check_in') ? '' : '<th style="text-align:left; padding: 8px; border-bottom: 1px solid var(--divider-color);">Check-in</th>'}
+              ${isExcluded('gate') ? '' : '<th style="text-align:left; padding: 8px; border-bottom: 1px solid var(--divider-color);">Gate</th>'}
+              ${isExcluded('status') ? '' : '<th style="text-align:left; padding: 8px; border-bottom: 1px solid var(--divider-color);">Status</th>'}
             </tr>
           </thead>
           <tbody>
@@ -143,6 +175,23 @@ class AvinorFlightCard extends HTMLElement {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
+  }
+
+  _normalizeExcludedColumns(excludeColumns) {
+    const normalized = new Set();
+    const list = Array.isArray(excludeColumns)
+      ? excludeColumns
+      : (typeof excludeColumns === 'string' ? excludeColumns.split(',') : []);
+    for (const raw of list) {
+      if (raw === undefined || raw === null) continue;
+      const key = String(raw)
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, '_')
+        .replace(/-/g, '_');
+      if (key) normalized.add(key);
+    }
+    return normalized;
   }
 
   _getAirportName(iataCode) {
@@ -295,12 +344,20 @@ customElements.define('avinor-flight-card', AvinorFlightCard);
 
 // Visual card editor for UI configuration
 class AvinorFlightCardEditor extends HTMLElement {
+  constructor() {
+    super();
+    this._config = null;
+    this._hass = null;
+  }
+
   setConfig(config) {
-    this._config = config;
-    // Only render if not already rendered
-    if (!this._rendered) {
-      this.render();
-    }
+    // Ensure config always has expected keys
+    this._config = {
+      title: '',
+      exclude_columns: [],
+      ...config,
+    };
+    this.render();
   }
 
   configChanged(newConfig) {
@@ -329,6 +386,24 @@ class AvinorFlightCardEditor extends HTMLElement {
       const dirLabel = direction === 'D' ? 'Departures' : 'Arrivals';
       return `<option value="${e}">${e} - ${airport} ${dirLabel}</option>`;
     }).join('');
+
+    const excluded = new Set(Array.isArray(this._config.exclude_columns) ? this._config.exclude_columns.map((c) => String(c).toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_')) : []);
+    const columns = [
+      { key: 'flight', label: 'Flight' },
+      { key: 'type', label: 'Type' },
+      { key: 'scheduled', label: 'Scheduled' },
+      { key: 'airport', label: 'Airport' },
+      { key: 'check_in', label: 'Check-in' },
+      { key: 'gate', label: 'Gate' },
+      { key: 'status', label: 'Status' },
+    ];
+
+    const columnOptions = columns.map(({ key, label }) => `
+      <label style="display:flex; align-items:center; gap:8px; margin: 6px 0;">
+        <input type="checkbox" data-col="${key}" ${excluded.has(key) ? 'checked' : ''} />
+        <span>${label}</span>
+      </label>
+    `).join('');
 
     this.innerHTML = `
       <div style="padding: 16px;">
@@ -363,6 +438,18 @@ class AvinorFlightCardEditor extends HTMLElement {
             Card title (leave empty for default)
           </div>
         </div>
+
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">
+            Exclude columns (optional)
+          </label>
+          <div style="padding: 8px; border: 1px solid var(--divider-color); border-radius: 4px;">
+            ${columnOptions}
+          </div>
+          <div style="margin-top: 4px; font-size: 0.9em; color: var(--secondary-text-color);">
+            Check the columns you want to hide
+          </div>
+        </div>
       </div>
     `;
 
@@ -383,11 +470,26 @@ class AvinorFlightCardEditor extends HTMLElement {
       this.configChanged(this._config);
     });
 
-    this._rendered = true;
+    // Excluded columns checkboxes
+    this.querySelectorAll('input[type="checkbox"][data-col]').forEach((el) => {
+      el.addEventListener('change', () => {
+        const nextExcluded = [];
+        this.querySelectorAll('input[type="checkbox"][data-col]').forEach((cb) => {
+          if (cb.checked) nextExcluded.push(cb.getAttribute('data-col'));
+        });
+        this._config = { ...this._config, exclude_columns: nextExcluded };
+        this.configChanged(this._config);
+      });
+    });
+
   }
 
   set hass(hass) {
     this._hass = hass;
+    // Home Assistant often sets hass after setConfig; re-render to populate entity list.
+    if (this._config) {
+      this.render();
+    }
   }
 }
 
