@@ -41,7 +41,7 @@ A custom Lovelace card for Home Assistant that displays flight information from 
 ```yaml
 lovelace:
   resources:
-    - url: /local/avinor-flight-card.js?v=1.0.5
+    - url: /local/avinor-flight-card.js?v=1.0.6
       type: module
 ```
 
@@ -85,6 +85,7 @@ title: "Flight Information"
 |------|------|---------|-------------|
 | `entity` | string | **Required** | The entity ID of your Avinor flight sensor |
 | `title` | string | `"Avinor Flight Data"` | Title displayed on the card |
+| `exclude_columns` | string[] | `[]` | Columns to hide. Valid values: `flight`, `type`, `scheduled`, `airport`, `check_in`, `gate`, `status` |
 
 ## Requirements
 
