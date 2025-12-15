@@ -41,7 +41,7 @@ A custom Lovelace card for Home Assistant that displays flight information from 
 ```yaml
 lovelace:
   resources:
-    - url: /local/avinor-flight-card.js?v=1.0.6
+    - url: /local/avinor-flight-card.js?v=1.0.7
       type: module
 ```
 
@@ -86,6 +86,32 @@ title: "Flight Information"
 | `entity` | string | **Required** | The entity ID of your Avinor flight sensor |
 | `title` | string | `"Avinor Flight Data"` | Title displayed on the card |
 | `exclude_columns` | string[] | `[]` | Columns to hide. Valid values: `flight`, `type`, `scheduled`, `airport`, `check_in`, `gate`, `status` |
+| `compact` | boolean | `false` | Use a more compact table layout |
+| `show_table_header` | boolean | `true` | Show/hide the table header row |
+| `show_meta` | boolean | `true` | Show/hide the meta line above the table (airport/direction/updated) |
+| `row_click_action` | string | `"none"` | Row click behavior. Valid values: `none`, `more-info` |
+| `sort_by` | string | `"scheduled"` | Sort rows by. Valid values: `scheduled`, `flight`, `type`, `airport`, `check_in`, `gate`, `status` |
+| `sort_dir` | string | `"asc"` | Sort direction. Valid values: `asc`, `desc` |
+| `max_rows` | number | `0` | Maximum rows to display. `0` shows all flights |
+
+Example:
+
+```yaml
+type: custom:avinor-flight-card
+entity: sensor.avinor_flight_data
+title: "Flight Information"
+compact: true
+show_table_header: true
+show_meta: true
+row_click_action: more-info
+sort_by: scheduled
+sort_dir: asc
+max_rows: 10
+exclude_columns:
+  - type
+  - check_in
+  - gate
+```
 
 ## Requirements
 
