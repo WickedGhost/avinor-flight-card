@@ -41,7 +41,7 @@ A custom Lovelace card for Home Assistant that displays flight information from 
 ```yaml
 lovelace:
   resources:
-    - url: /local/avinor-flight-card.js?v=1.0.7
+    - url: /local/avinor-flight-card.js?v=1.0.9
       type: module
 ```
 
@@ -89,7 +89,7 @@ title: "Flight Information"
 | `compact` | boolean | `false` | Use a more compact table layout |
 | `show_table_header` | boolean | `true` | Show/hide the table header row |
 | `show_meta` | boolean | `true` | Show/hide the meta line above the table (airport/direction/updated) |
-| `row_click_action` | string | `"none"` | Row click behavior. Valid values: `none`, `more-info` |
+| `row_click_action` | string | `"none"` | Row click behavior. Valid values: `none`, `more-info`, `flight-details` |
 | `sort_by` | string | `"scheduled"` | Sort rows by. Valid values: `scheduled`, `flight`, `type`, `airport`, `check_in`, `gate`, `status` |
 | `sort_dir` | string | `"asc"` | Sort direction. Valid values: `asc`, `desc` |
 | `max_rows` | number | `0` | Maximum rows to display. `0` shows all flights |
@@ -111,7 +111,15 @@ exclude_columns:
   - type
   - check_in
   - gate
+
 ```
+
+### Flight details (Airlabs)
+
+If you have configured an Airlabs API key in the **Avinor Flight Data** integration options, you can let the card fetch flight details when you click a row.
+
+- Set `row_click_action: flight-details`
+- The card calls the service `avinor_flight_data.get_flight_details` using the flight id (IATA), and shows the returned data in a simple details view inside the card
 
 ## Requirements
 
