@@ -30,6 +30,11 @@ class AvinorFlightCard extends HTMLElement {
     this._excludedColumns = new Set();
     this._card = null;
     this._content = null;
+
+    this._detailsFlightIata = null;
+    this._detailsLoading = false;
+    this._detailsError = '';
+    this._detailsData = null;
   }
 
   static getStubConfig(hass) {
@@ -131,7 +136,8 @@ class AvinorFlightCard extends HTMLElement {
       : `${visibleFlights.length}/${flights.length}`;
     const header = `Airport: ${airport} • Direction: ${direction} • Flights: ${flightsLabel} • Updated: ${updatedDisplay}`;
 
-    const clickable = this._config.row_click_action === 'more-info';
+    const clickAction = this._config.row_click_action;
+    const clickable = clickAction === 'more-info' || clickAction === 'flight-details';
 
     const rows = visibleFlights.map(f => {
       // Convert dom_int code to description
@@ -150,8 +156,10 @@ class AvinorFlightCard extends HTMLElement {
 
       const scheduleCell = this._formatScheduleCell(f);
 
+      const flightIata = f.flightId || '';
+
       return `
-        <tr class="afc-row ${clickable ? 'afc-row--clickable' : ''}" ${clickable ? `tabindex="0" role="button" data-entity="${this._e(entityId)}"` : ''}>
+        <tr class="afc-row ${clickable ? 'afc-row--clickable' : ''}" ${clickable ? `tabindex="0" role="button" data-entity="${this._e(entityId)}" data-flight-iata="${this._e(flightIata)}"` : ''}>
           ${isExcluded('flight') ? '' : `<td>${this._e(f.flightId)}</td>`}
           ${isExcluded('type') ? '' : `<td>${this._e(flightType)}</td>`}
           ${isExcluded('scheduled') ? '' : `<td>${scheduleCell}</td>`}
@@ -208,7 +216,53 @@ class AvinorFlightCard extends HTMLElement {
       .afc-status--good { color: var(--success-color); }
 
       .afc-footer { margin-top: 8px; font-size: 0.8em; color: var(--secondary-text-color); }
+
+      .afc-details__back { display: inline-flex; align-items: center; margin: 0 0 10px 0; padding: 6px 10px; border: 1px solid var(--divider-color); border-radius: 6px; background: var(--card-background-color); color: var(--primary-text-color); cursor: pointer; }
+      .afc-details__title { font-weight: 600; margin-bottom: 8px; color: var(--primary-text-color); }
+      .afc-details__loading { color: var(--secondary-text-color); }
+      .afc-details__error { color: var(--error-color); white-space: pre-wrap; }
+
+      .afc-details__grid { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 8px; }
+      .afc-details__row { display: grid; grid-template-columns: minmax(110px, 0.9fr) 2fr; gap: 12px; align-items: baseline; padding: 8px 10px; border: 1px solid var(--divider-color); border-radius: 6px; }
+      .afc-details__label { color: var(--secondary-text-color); font-size: 0.85em; }
+      .afc-details__value { color: var(--primary-text-color); overflow-wrap: anywhere; }
+      .afc-details__route { font-weight: 600; }
+
+      .afc-details__raw { margin-top: 10px; }
+      .afc-details__raw > summary { cursor: pointer; color: var(--secondary-text-color); }
+      .afc-details__json { margin: 8px 0 0 0; padding: 10px; border: 1px solid var(--divider-color); border-radius: 6px; background: var(--card-background-color); color: var(--primary-text-color); overflow: auto; }
     `;
+
+    if (this._detailsFlightIata) {
+      const title = `Flight details: ${this._detailsFlightIata}`;
+      const body = this._detailsLoading
+        ? `<div class="afc-details__loading">Loading details from Airlabs…</div>`
+        : (this._detailsError
+          ? `<div class="afc-details__error">${this._e(this._detailsError)}</div>`
+          : this._renderFlightDetails(this._detailsData));
+
+      this._content.innerHTML = `
+        <style>${styles}</style>
+        ${metaHtml}
+        <div class="afc-details">
+          <button type="button" class="afc-details__back">Back</button>
+          <div class="afc-details__title">${this._e(title)}</div>
+          ${body}
+        </div>
+      `;
+
+      const backBtn = this._content.querySelector('.afc-details__back');
+      if (backBtn) {
+        backBtn.onclick = () => {
+          this._detailsFlightIata = null;
+          this._detailsLoading = false;
+          this._detailsError = '';
+          this._detailsData = null;
+          this.hass = this._hass;
+        };
+      }
+      return;
+    }
 
     this._content.innerHTML = `
       <style>${styles}</style>
@@ -231,20 +285,363 @@ class AvinorFlightCard extends HTMLElement {
       if (tbody) {
         // Replace existing handler by resetting onclick/keydown (simple + safe)
         tbody.onclick = (ev) => {
-          const tr = ev.target && ev.target.closest ? ev.target.closest('.afc-row--clickable') : null;
+          const tr = this._getClickableRowFromEvent(ev);
           if (!tr) return;
-          this._fireMoreInfo(entityId);
+          if (clickAction === 'more-info') {
+            this._fireMoreInfo(entityId);
+            return;
+          }
+          if (clickAction === 'flight-details') {
+            const flightIata = tr.getAttribute('data-flight-iata') || '';
+            if (!flightIata) return;
+            this._openFlightDetails(flightIata);
+          }
         };
         tbody.onkeydown = (ev) => {
           const key = ev.key;
           if (key !== 'Enter' && key !== ' ') return;
-          const tr = ev.target && ev.target.closest ? ev.target.closest('.afc-row--clickable') : null;
+          const tr = this._getClickableRowFromEvent(ev);
           if (!tr) return;
           ev.preventDefault();
-          this._fireMoreInfo(entityId);
+          if (clickAction === 'more-info') {
+            this._fireMoreInfo(entityId);
+            return;
+          }
+          if (clickAction === 'flight-details') {
+            const flightIata = tr.getAttribute('data-flight-iata') || '';
+            if (!flightIata) return;
+            this._openFlightDetails(flightIata);
+          }
         };
       }
     }
+  }
+
+  _getClickableRowFromEvent(ev) {
+    try {
+      const path = ev && typeof ev.composedPath === 'function' ? ev.composedPath() : null;
+      let target = (path && path.length ? path[0] : (ev ? ev.target : null)) || null;
+
+      // Some browsers can report Text nodes as event targets
+      if (target && target.nodeType === 3) {
+        target = target.parentElement;
+      }
+
+      if (target && typeof target.closest === 'function') {
+        return target.closest('.afc-row--clickable');
+      }
+
+      if (target && target.parentElement && typeof target.parentElement.closest === 'function') {
+        return target.parentElement.closest('.afc-row--clickable');
+      }
+    } catch (e) {
+      // ignore
+    }
+    return null;
+  }
+
+  async _openFlightDetails(flightIata) {
+    const cleaned = String(flightIata || '').trim();
+    if (!cleaned) return;
+
+    this._detailsFlightIata = cleaned;
+    this._detailsLoading = true;
+    this._detailsError = '';
+    this._detailsData = null;
+    this.hass = this._hass;
+
+    try {
+      const details = await this._callFlightDetailsService(cleaned);
+      this._detailsData = details;
+    } catch (err) {
+      this._detailsError = (err && err.message) ? err.message : String(err);
+    } finally {
+      this._detailsLoading = false;
+      this.hass = this._hass;
+    }
+  }
+
+  async _callFlightDetailsService(flightIata) {
+    const hass = this._hass;
+    if (!hass) throw new Error('Home Assistant not ready');
+
+    const payload = {
+      type: 'call_service',
+      domain: 'avinor_flight_data',
+      service: 'get_flight_details',
+      service_data: {
+        flight_iata: String(flightIata || '').trim(),
+      },
+      return_response: true,
+    };
+
+    if (typeof hass.callWS === 'function') {
+      const res = await hass.callWS(payload);
+      if (res && typeof res === 'object') {
+        if (res.response && typeof res.response === 'object') return res.response;
+        if (res.result && typeof res.result === 'object') return res.result;
+      }
+      return res;
+    }
+
+    if (typeof hass.callService === 'function') {
+      // Fallback for very old HA frontends: call service, but response won't be available.
+      hass.callService('avinor_flight_data', 'get_flight_details', payload.service_data);
+      return { note: 'Service called. This Home Assistant version does not expose service responses to the frontend.' };
+    }
+
+    throw new Error('Home Assistant frontend does not support calling services');
+  }
+
+  _renderFlightDetails(details) {
+    const root = this._unwrapFlightDetails(details);
+    const asJson = () => this._e(JSON.stringify(details || {}, null, 2));
+
+    const linesToHtml = (lines) => {
+      const safe = Array.isArray(lines)
+        ? lines
+          .filter((x) => x !== undefined && x !== null)
+          .map((x) => String(x).trim())
+          .filter(Boolean)
+          .map((x) => this._e(x))
+        : [];
+      return safe.join('<br/>');
+    };
+
+    if (!root || typeof root !== 'object') {
+      return `
+        <div class="afc-details__grid">
+          <div class="afc-details__row">
+            <div class="afc-details__label">Details</div>
+            <div class="afc-details__value">${this._e(String(root ?? 'No data'))}</div>
+          </div>
+        </div>
+        <details class="afc-details__raw">
+          <summary>Raw data</summary>
+          <pre class="afc-details__json">${asJson()}</pre>
+        </details>
+      `;
+    }
+
+    const status = this._getAny(root, ['status', 'flight_status', 'flightStatus', 'flight_status_iata', 'flight_status_icao']);
+    const airline = this._getAny(root, ['airline_name', 'airline', 'airline.name', 'airlineName', 'airline_fullname']);
+    const airlineIata = this._getAny(root, ['airline_iata', 'airline.iata', 'airlineIata']);
+    const airlineIcao = this._getAny(root, ['airline_icao', 'airline.icao', 'airlineIcao']);
+    const callsign = this._getAny(root, ['callsign', 'call_sign', 'callSign']);
+    const flightNumber = this._getAny(root, ['flight_number', 'flightNumber', 'flight.number', 'flight.num']);
+    const flightIata = this._getAny(root, ['flight_iata', 'flight.iata', 'iata']);
+    const flightIcao = this._getAny(root, ['flight_icao', 'flight.icao', 'icao']);
+
+    const updatedAt = this._formatDetailsDateTime(this._getAny(root, ['updated', 'updated_at', 'updatedAt', 'last_updated', 'timestamp']));
+
+    const depIata = this._getAny(root, ['dep_iata', 'departure.iata', 'dep.iata', 'dep_airport_iata', 'dep_airport']);
+    const depIcao = this._getAny(root, ['dep_icao', 'departure.icao', 'dep.icao']);
+    const depName = this._getAny(root, ['dep_name', 'departure.name', 'dep.name', 'departure.airport', 'dep_airport_name']);
+    const depCity = this._getAny(root, ['dep_city', 'departure.city', 'dep.city']);
+    const depTerminal = this._getAny(root, ['dep_terminal', 'departure.terminal', 'dep.terminal', 'departure.term']);
+    const depGate = this._getAny(root, ['dep_gate', 'departure.gate', 'dep.gate']);
+    const depBaggage = this._getAny(root, ['dep_baggage', 'departure.baggage', 'dep.baggage']);
+
+    const arrIata = this._getAny(root, ['arr_iata', 'arrival.iata', 'arr.iata', 'arr_airport_iata', 'arr_airport']);
+    const arrIcao = this._getAny(root, ['arr_icao', 'arrival.icao', 'arr.icao']);
+    const arrName = this._getAny(root, ['arr_name', 'arrival.name', 'arr.name', 'arrival.airport', 'arr_airport_name']);
+    const arrCity = this._getAny(root, ['arr_city', 'arrival.city', 'arr.city']);
+    const arrTerminal = this._getAny(root, ['arr_terminal', 'arrival.terminal', 'arr.terminal', 'arrival.term']);
+    const arrGate = this._getAny(root, ['arr_gate', 'arrival.gate', 'arr.gate']);
+    const arrBaggage = this._getAny(root, ['arr_baggage', 'arrival.baggage', 'arr.baggage', 'baggage']);
+
+    const delayMin = this._getAny(root, ['delayed', 'delay', 'delay_min', 'delayMinutes', 'dep_delay', 'arr_delay']);
+
+    const depTime = this._formatDetailsDateTime(this._getAny(root, [
+      'dep_time', 'departure.scheduled', 'departure.scheduled_time', 'dep_scheduled', 'scheduled_departure',
+    ]));
+    const depEst = this._formatDetailsDateTime(this._getAny(root, [
+      'dep_estimated', 'dep_est', 'departure.estimated', 'departure.estimated_time', 'estimated_departure',
+    ]));
+    const depAct = this._formatDetailsDateTime(this._getAny(root, [
+      'dep_actual', 'dep_act', 'departure.actual', 'departure.actual_time', 'actual_departure',
+    ]));
+
+    const arrTime = this._formatDetailsDateTime(this._getAny(root, [
+      'arr_time', 'arrival.scheduled', 'arrival.scheduled_time', 'arr_scheduled', 'scheduled_arrival',
+    ]));
+    const arrEst = this._formatDetailsDateTime(this._getAny(root, [
+      'arr_estimated', 'arr_est', 'arrival.estimated', 'arrival.estimated_time', 'estimated_arrival',
+    ]));
+    const arrAct = this._formatDetailsDateTime(this._getAny(root, [
+      'arr_actual', 'arr_act', 'arrival.actual', 'arrival.actual_time', 'actual_arrival',
+    ]));
+
+    const aircraftIcao = this._getAny(root, ['aircraft_icao', 'aircraft.icao', 'aircraft.type', 'aircraftType']);
+    const aircraftIata = this._getAny(root, ['aircraft_iata', 'aircraft.iata']);
+    const reg = this._getAny(root, ['reg_number', 'registration', 'aircraft.reg', 'aircraft.registration', 'tail_number']);
+    const hex = this._getAny(root, ['hex', 'aircraft_hex', 'aircraft.hex']);
+
+    const lat = this._getAny(root, ['lat', 'latitude', 'live.lat', 'live.latitude']);
+    const lng = this._getAny(root, ['lng', 'lon', 'longitude', 'live.lng', 'live.lon', 'live.longitude']);
+    const alt = this._getAny(root, ['alt', 'altitude', 'live.alt', 'live.altitude']);
+    const speed = this._getAny(root, ['speed', 'spd', 'live.speed']);
+    const heading = this._getAny(root, ['dir', 'heading', 'track', 'live.dir', 'live.heading']);
+
+    const routeLeft = depIata || depIcao || '';
+    const routeRight = arrIata || arrIcao || '';
+    const route = (routeLeft && routeRight) ? `${routeLeft} → ${routeRight}` : '';
+
+    const rows = [];
+
+    if (route) rows.push(this._detailRow('Route', `<span class="afc-details__route">${this._e(route)}</span>`));
+    if (status) {
+      const kind = this._getStatusKindFromText(status);
+      rows.push(this._detailRow('Status', `<span class="afc-status afc-status--${this._e(kind)}">${this._e(status)}</span>`));
+    }
+    if (delayMin) rows.push(this._detailRow('Delay', this._e(`${delayMin} min`)));
+
+    const flightLine = [flightIata, flightIcao, flightNumber].filter(Boolean).join(' · ');
+    if (flightLine) rows.push(this._detailRow('Flight', this._e(flightLine)));
+    const airlineLine = [airline, [airlineIata, airlineIcao].filter(Boolean).join(' / ')].filter(Boolean).join(' · ');
+    if (airlineLine) rows.push(this._detailRow('Airline', this._e(airlineLine)));
+    if (callsign) rows.push(this._detailRow('Callsign', this._e(callsign)));
+    if (updatedAt) rows.push(this._detailRow('Updated', this._e(updatedAt)));
+
+    const depAirportLine = [
+      [depIata, depIcao].filter(Boolean).join(' · '),
+      depName,
+      depCity,
+    ].filter(Boolean).join(' — ');
+    const arrAirportLine = [
+      [arrIata, arrIcao].filter(Boolean).join(' · '),
+      arrName,
+      arrCity,
+    ].filter(Boolean).join(' — ');
+    if (depAirportLine) rows.push(this._detailRow('Departure', this._e(depAirportLine)));
+    if (arrAirportLine) rows.push(this._detailRow('Arrival', this._e(arrAirportLine)));
+
+    const depOps = [
+      depTerminal && `Terminal: ${depTerminal}`,
+      depGate && `Gate: ${depGate}`,
+      depBaggage && `Baggage: ${depBaggage}`,
+    ].filter(Boolean);
+    const arrOps = [
+      arrTerminal && `Terminal: ${arrTerminal}`,
+      arrGate && `Gate: ${arrGate}`,
+      arrBaggage && `Baggage: ${arrBaggage}`,
+    ].filter(Boolean);
+    if (depOps.length) rows.push(this._detailRow('Dep ops', linesToHtml(depOps)));
+    if (arrOps.length) rows.push(this._detailRow('Arr ops', linesToHtml(arrOps)));
+
+    const depTimes = [
+      depTime && `Scheduled: ${depTime}`,
+      depEst && `Estimated: ${depEst}`,
+      depAct && `Actual: ${depAct}`,
+    ].filter(Boolean);
+    const arrTimes = [
+      arrTime && `Scheduled: ${arrTime}`,
+      arrEst && `Estimated: ${arrEst}`,
+      arrAct && `Actual: ${arrAct}`,
+    ].filter(Boolean);
+    if (depTimes.length) rows.push(this._detailRow('Dep times', linesToHtml(depTimes)));
+    if (arrTimes.length) rows.push(this._detailRow('Arr times', linesToHtml(arrTimes)));
+
+    const aircraftLine = [aircraftIcao, aircraftIata, reg, hex].filter(Boolean).join(' · ');
+    if (aircraftLine) rows.push(this._detailRow('Aircraft', this._e(aircraftLine)));
+
+    const live = [
+      (lat && lng) ? `Position: ${lat}, ${lng}` : '',
+      alt ? `Altitude: ${alt}` : '',
+      speed ? `Speed: ${speed}` : '',
+      heading ? `Heading: ${heading}` : '',
+    ].filter(Boolean);
+    if (live.length) rows.push(this._detailRow('Live', linesToHtml(live)));
+
+    if (!rows.length) rows.push(this._detailRow('Details', 'No recognizable fields in response'));
+
+    return `
+      <div class="afc-details__grid">${rows.join('')}</div>
+      <details class="afc-details__raw">
+        <summary>Raw data</summary>
+        <pre class="afc-details__json">${asJson()}</pre>
+      </details>
+    `;
+  }
+
+  _detailRow(label, valueHtml) {
+    return `
+      <div class="afc-details__row">
+        <div class="afc-details__label">${this._e(label)}</div>
+        <div class="afc-details__value">${valueHtml}</div>
+      </div>
+    `;
+  }
+
+  _unwrapFlightDetails(details) {
+    if (!details || typeof details !== 'object') return details;
+    // Common wrappers: { data: {...} }, { flight: {...} }, { flight_details: {...} }
+    const candidates = ['data', 'flight', 'flight_details', 'flightDetails', 'result', 'response'];
+    for (const key of candidates) {
+      if (details[key] && typeof details[key] === 'object') return details[key];
+    }
+    return details;
+  }
+
+  _getAny(obj, paths) {
+    if (!obj || typeof obj !== 'object') return '';
+    for (const p of paths) {
+      const v = this._getPath(obj, p);
+      if (v === undefined || v === null) continue;
+      const s = String(v).trim();
+      if (s) return v;
+    }
+    return '';
+  }
+
+  _getPath(obj, path) {
+    if (!obj || typeof obj !== 'object') return undefined;
+    const parts = String(path || '').split('.').map((x) => x.trim()).filter(Boolean);
+    let cur = obj;
+    for (const part of parts) {
+      if (!cur || typeof cur !== 'object') return undefined;
+      cur = cur[part];
+    }
+    return cur;
+  }
+
+  _formatDetailsDateTime(value) {
+    if (value === undefined || value === null) return '';
+    const raw = String(value).trim();
+    if (!raw) return '';
+
+    // Numeric timestamps (seconds or milliseconds)
+    if (typeof value === 'number' || /^[0-9]{10,13}$/.test(raw)) {
+      const n = Number(value);
+      if (Number.isFinite(n)) {
+        const ms = n > 1e12 ? n : n * 1000;
+        const d = new Date(ms);
+        if (!isNaN(d.getTime())) return this._formatDateTimeLocal(d);
+      }
+    }
+
+    const d = this._tryParseDate(raw);
+    if (d) return this._formatDateTimeLocal(d);
+    return raw;
+  }
+
+  _formatDateTimeLocal(date) {
+    try {
+      return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+    } catch (e) {
+      // Fallback for older engines
+      return date.toLocaleString();
+    }
+  }
+
+  _getStatusKindFromText(statusText) {
+    const s = String(statusText || '').toLowerCase();
+    if (!s) return 'info';
+    if (s.includes('cancel')) return 'bad';
+    if (s.includes('delay') || s.includes('divert') || s.includes('late') || s.includes('hold')) return 'warn';
+    if (s.includes('arriv') || s.includes('land') || s.includes('depart') || s.includes('airborne') || s.includes('en route') || s.includes('en-route') || s.includes('active')) return 'good';
+    if (s.includes('scheduled') || s.includes('boarding') || s.includes('gate')) return 'ok';
+    return 'ok';
   }
 
   _e(v) {
@@ -703,6 +1100,7 @@ class AvinorFlightCardEditor extends HTMLElement {
           >
             <option value="none" ${rowClickAction === 'none' ? 'selected' : ''}>None</option>
             <option value="more-info" ${rowClickAction === 'more-info' ? 'selected' : ''}>Open entity more-info</option>
+            <option value="flight-details" ${rowClickAction === 'flight-details' ? 'selected' : ''}>Open flight details (Airlabs)</option>
           </select>
         </div>
 
